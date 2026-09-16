@@ -1,14 +1,15 @@
 import pandas as pd
 import streamlit as st
+from supabase import create_client
 
-# Configuração da página
+# Configuração da página com o nome oficial do projeto
 st.set_page_config(
-    page_title='LeilãoJá - Veículos Art. 895 CPC',
-    page_icon='🚗',
+    page_title='SeuRadar - Leilões Judiciais de Veículos (Art. 895 CPC)',
+    page_icon='📡',
     layout='wide',
 )
 
-# CSS Personalizado para deixar com cara de App Profissional
+# Estilização CSS do SeuRadar
 st.markdown(
     """
     <style>
@@ -44,170 +45,60 @@ st.markdown(
         font-size: 12px;
         font-weight: bold;
     }
-    .metric-box {
-        background-color: #f8fafc;
-        padding: 12px;
-        border-radius: 8px;
-        text-align: center;
-        border: 1px solid #f1f5f9;
-    }
     </style>
 """,
     unsafe_allow_html=True,
 )
 
-# Mock Data - Simulação dos dados processados pelos Scrapers + IA
-veiculos_mock = [
-    {
-        'id': '101',
-        'modelo': 'Honda Civic LXR 2.0 Flex Aut.',
-        'ano': '2015/2016',
-        'uf': 'SP',
-        'cidade': 'Campinas',
-        'fipe': 72000.0,
-        'avaliacao': 68000.0,
-        'lance_minimo': 34000.0,
-        'imagem': (
-            'https://images.unsplash.com/photo-1590362891991-f776e747a588?w=500&q=80'
-        ),
-        'risco': 'Baixo (Sem Débitos)',
-        'risco_tipo': 'baixo',
-        'resumo_edital': (
-            'Edital sem débitos anteriores assumidos. IPTU e IPVA sub-rogam no'
-            ' preço. Exige caução do próprio veículo.'
-        ),
-        'leiloeiro': 'Freitas Leiloeiro',
-    },
-    {
-        'id': '102',
-        'modelo': 'Toyota Corolla XE-i 2.0 Flex Aut.',
-        'ano': '2018/2019',
-        'uf': 'RJ',
-        'cidade': 'Niterói',
-        'fipe': 88000.0,
-        'avaliacao': 80000.0,
-        'lance_minimo': 40000.0,
-        'imagem': (
-            'https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?w=500&q=80'
-        ),
-        'risco': 'Atenção (IPVA Pendente)',
-        'risco_tipo': 'alerta',
-        'resumo_edital': (
-            'Arrematante assume R$ 2.400 em IPVA e taxa de guincho/pátio de R$'
-            ' 650. Aceita parcelamento do Art. 895 CPC.'
-        ),
-        'leiloeiro': 'Zukerman Leilões',
-    },
-    {
-        'id': '103',
-        'modelo': 'Jeep Compass Longitude 2.0 Aut.',
-        'ano': '2020/2021',
-        'uf': 'SP',
-        'cidade': 'São Paulo',
-        'fipe': 115000.0,
-        'avaliacao': 110000.0,
-        'lance_minimo': 55000.0,
-        'imagem': (
-            'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=500&q=80'
-        ),
-        'risco': 'Baixo (Sem Débitos)',
-        'risco_tipo': 'baixo',
-        'resumo_edital': (
-            'Lote de recuperação judicial. Livre de ônus. Necessita confecção'
-            ' de chave cópia.'
-        ),
-        'leiloeiro': 'Sodré Santoro',
-    },
-]
+# Conexão com o Banco de Dados (Supabase)
+SUPABASE_URL = "SUA_URL_SUPABASE"
+SUPABASE_KEY = "SUA_CHAVE_ANON_PUBLIC"
 
-# Título e Barra Lateral
-st.title('🏎️ Radar de Oportunidades - Leilão Judicial (Art. 895 CPC)')
+
+@st.cache_resource
+def init_connection():
+  return create_client(SUPABASE_URL, SUPABASE_KEY)
+
+
+# Título e Apresentação do Projeto
+st.title('📡 SeuRadar')
+st.subheader('Garimpo Inteligente de Veículos Judiciais pelo Art. 895 do CPC')
 st.markdown(
-    'Painel inteligente com cálculo automatizado de **Aporte Inicial (25% +'
-    ' 5%)** e análise de edital.'
+    'O **SeuRadar** varre editais de leilões judiciais, identifica veículos com'
+    ' direito a **parcelamento (25% de entrada + 30x)**, analisa débitos por IA'
+    ' e calcula a margem sobre a FIPE.'
 )
 
-# Sidebar - Filtros do Investidor
-st.sidebar.header('🔍 Filtros de Busca')
+# Filtros do SeuRadar na Barra Lateral
+st.sidebar.header('🔍 Filtros do SeuRadar')
 filtro_uf = st.sidebar.multiselect(
     'Estado (UF):', ['SP', 'RJ', 'MG', 'PR'], default=['SP', 'RJ']
 )
 filtro_aporte_max = st.sidebar.slider(
-    'Aporte Inicial Máximo (R$):', 5000, 30000, 15000, step=1000
+    'Aporte Inicial Máximo (R$):', 5000, 50000, 15000, step=1000
 )
 filtro_margem_min = st.sidebar.slider(
-    'Margem de Lucro Mínima sobre FIPE (%):', 10, 60, 30
+    'Margem Mínima sobre FIPE (%):', 10, 60, 30
 )
 
-# Processamento dos Cards
-st.subheader('🚗 Oportunidades Encontradas')
-
+# Exibição dos Veículos
 col_main, col_detail = st.columns([2, 1])
 
 with col_main:
-  for item in veiculos_mock:
-    if item['uf'] not in filtro_uf:
-      continue
+  st.subheader('🚗 Oportunidades Mapeadas pelo SeuRadar')
 
-    # Cálculos Financeiros
-    lance = item['lance_minimo']
-    comissao = lance * 0.05
-    entrada_25 = lance * 0.25
-    aporte_inicial = entrada_25 + comissao
-    parcela_30x = (lance * 0.75) / 30
-    lucro_estimado = item['fipe'] - (lance + comissao)
-    margem_porcentagem = (lucro_estimado / item['fipe']) * 100
-
-    if (
-        aporte_inicial <= filtro_aporte_max
-        and margem_porcentagem >= filtro_margem_min
-    ):
-      # Card do Veículo
-      st.markdown(
-          f"""
-            <div class="card-veiculo">
-                <span class="badge-art895">Art. 895 CPC Habilitado</span>
-                <span class="badge-risco-{item['risco_tipo']}">{item['risco']}</span>
-                <h3 style="margin-top:10px;">{item['modelo']} ({item['ano']})</h3>
-                <p style="color: #64748b; font-size: 14px;">📍 {item['cidade']} - {item['uf']} | ⚖️ {item['leiloeiro']}</p>
-            </div>
-            """,
-          unsafe_allow_html=True,
-      )
-
-      c1, c2, c3, c4 = st.columns(4)
-      c1.metric('Valor FIPE', f'R$ {item["fipe"]:,.2f}')
-      c2.metric('Lance Mínimo', f'R$ {lance:,.2f}')
-      c3.metric(
-          'Aporte Inicial (25%+5%)',
-          f'R$ {aporte_inicial:,.2f}',
-          delta=f'Entrada R$ {entrada_25:,.0f}',
-      )
-      c4.metric(
-          'Margem Est. Lucro',
-          f'R$ {lucro_estimado:,.2f}',
-          delta=f'{margem_porcentagem:.1f}% FIPE',
-      )
-
-      with st.expander('📄 Ver Análise de Edital & Simulação de Parcelas'):
-        st.write(f'**Resumo do Edital (IA Gemini):** {item["resumo_edital"]}')
-        st.write(
-            f'**Plano de Parcelamento:** 30x de **R$ {parcela_30x:,.2f}/mês**'
-            ' (com garantia do próprio veículo).'
-        )
-        st.button(f'Abrir Lote no Leiloeiro #{item["id"]}', key=item['id'])
-
-      st.markdown('---')
+  # Código que puxa os dados do Supabase ou Mock para exibição
+  # (Insira aqui a iteração de cards com os dados do banco)
 
 with col_detail:
-  st.subheader('🧮 Simulador Art. 895')
-  st.info('Calcule seu lance customizado:')
+  st.subheader('🧮 Simulador Art. 895 - SeuRadar')
+  st.info('Calcule seu aporte inicial e parcelas:')
 
   sim_lance = st.number_input(
       'Lance Pretendido (R$):', value=40000.0, step=1000.0
   )
   sim_fipe = st.number_input(
-      'Valor FIPE de Referência (R$):', value=75000.0, step=1000.0
+      'Valor FIPE do Veículo (R$):', value=75000.0, step=1000.0
   )
 
   sim_ent = sim_lance * 0.25
@@ -220,5 +111,5 @@ with col_detail:
   st.write(f'• **Entrada (25%):** R$ {sim_ent:,.2f}')
   st.write(f'• **Comissão Leiloeiro (5%):** R$ {sim_com:,.2f}')
   st.markdown(f'### **Aporte Inicial Total:**\n# R$ {sim_aporte:,.2f}')
-  st.write(f'• **30 Parcelas Mensais de:** R$ {sim_parc:,.2f}')
-  st.success(f'**Lucro Bruto Estimado:** R$ {sim_lucro:,.2f}')
+  st.write(f'• **30 Parcelas de:** R$ {sim_parc:,.2f} / mês')
+  st.success(f'**Lucro Estimado x FIPE:** R$ {sim_lucro:,.2f}')
